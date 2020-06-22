@@ -8,37 +8,40 @@ const Budget = require('../db/schema')
 const auth = async(req,res,next) => {
     try {
         const user = await Budget.findOne({ username : req.params.name })
-        console.log(typeof user.jwt)
+        if(!user) {
+            return res.status(404).json({
+                error : 'Not Found'
+            })
+        }
         const decoded = jwt.verify(user.jwt,process.env.SECRET)
-        console.log(decoded)
-        next()
+        if(decoded.username === req.params.name) {
+            return next()
+        }
+        res.status(400).json({
+            error : 'Not Authenticated'
+        })
     } catch(error) {
-        console.log(error)
-        next()
+        res.status(400).json({
+            error : error
+        })
     }
-}
-
-const generateToken = async(username) => {
-    const token = await jwt.sign({ username : username },process.env.SECRET)
-    return token
 }
 
 router.post('/addUser',async(req,res) => {
     const user = new Budget({
         _id : new mongoose.Types.ObjectId,
-        username : req.body.username,
-        password : await bcrypt.hash(req.body.password,8),
-        jwt : await generateToken(req.body.username)
+        username : req.body.username.trim(),
+        password : await bcrypt.hash(req.body.password.trim(),8),
+        jwt : jwt.sign({ username: req.body.username }, process.env.SECRET)
     })
     try {
         const newUSer = await user.save()
         res.status(201).json({
-            message : 'Created',
-            newUSer
+            msg : 'Created',
         })
     } catch (error) {
         res.status(400).json({
-            message : error
+            error : error
         })
     }
 })
@@ -49,17 +52,19 @@ router.get('/login',async(req,res) => {
         if(user) {
             isAuth = await bcrypt.compare(req.body.password,user.password)
             if(isAuth) {
+                const newToken = jwt.sign({ username : user.username },process.env.SECRET)
+                await Budget.updateOne({ username : user.username },{ jwt : newToken })
                 return res.status(200).json({
                     msg : 'Authenticated'
                 })
             } else {
                 return res.status(400).json({
-                    msg : 'Not Authenticated'
+                    error : 'Not Authenticated'
                 })
             }
         }
         res.status(404).json({
-            msg : 'not found'
+            error : 'not found'
         })
     } catch(error) {
         res.status(500).json({
@@ -74,12 +79,15 @@ router.get('/getData/:name',auth,async(req,res)=>{
         const data = await Budget.findOne({username : req.params.name})
         if(data) {
             return res.status(200).json({
-                msg : 'found',
-                data : data
+            username : data.username,
+               totalCredit : data.totalCredit,
+               totalDebit : data.totalDebit,
+               credit : data.credit,
+               debit : data.debit
             })
         }
         res.status(404).json({
-            msg : 'not found'
+            error : 'not found'
         })
     } catch (error) {
         res.status(400).json({
@@ -88,12 +96,12 @@ router.get('/getData/:name',auth,async(req,res)=>{
     }
 })
 
-router.patch('/addCredit/:name',async(req,res) => {
+router.patch('/addCredit/:name',auth,async(req,res) => {
     try {
         const user = await Budget.findOne({username : req.params.name})
         if(!user) {
             return res.status(404).json({
-                msg : 'not found'
+                error : 'not found'
             })
         }        
         const newCredit = {
@@ -112,12 +120,12 @@ router.patch('/addCredit/:name',async(req,res) => {
     }
 })
 
-router.patch('/addDebit/:name',async(req,res) => {
+router.patch('/addDebit/:name',auth,async(req,res) => {
     try {
         const user = await Budget.findOne({username : req.params.name})
         if(!user) {
             return res.status(404).json({
-                msg : 'not found'
+                error : 'not found'
             })
         }        
         const newDebit = {
@@ -132,6 +140,16 @@ router.patch('/addDebit/:name',async(req,res) => {
     } catch (error) {
         res.status(500).json({
             error : error
+        })
+    }
+})
+
+router.delete('/removeUser/:name',auth,async(req,res) => {
+    try {
+        await Budget.deleteOne({ username : req.params.name })
+    } catch(error) {
+        res.status(404).json({
+            error : 'Not Found'
         })
     }
 })
