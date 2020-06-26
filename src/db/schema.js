@@ -14,9 +14,6 @@ const budgetSchema = mongoose.Schema({
         type : String,
         required : true
     },
-    jwt :{
-        type : String
-    },
     totalCredit : {
         type : Number,
         default : 0

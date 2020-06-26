@@ -5,39 +5,43 @@ const bcrypt = require('bcrypt')
 const jwt = require('jsonwebtoken')
 const Budget = require('../db/schema')
 
-const auth = async(req,res,next) => {
+
+const auth = async (req, res, next) => {
     try {
-        const user = await Budget.findOne({ username : req.params.name })
-        if(!user) {
-            return res.status(404).json({
-                error : 'Not Found'
-            })
-        }
-        const decoded = jwt.verify(user.jwt,process.env.SECRET)
+        const token = req.header('Authorization')
+        const decoded = jwt.verify(token, process.env.SECRET)
+        // console.log(decode)
+        // const user = await User.find({ username : decoded })
+        // console.log(user)
         if(decoded.username === req.params.name) {
             return next()
         }
-        res.status(400).json({
-            error : 'Not Authenticated'
+        res.status(404).json({
+            msg : 'Please Authenticate' 
         })
-    } catch(error) {
+    }
+    catch(e) {
         res.status(400).json({
-            error : error
+            error : e
         })
     }
 }
+
+module.exports = auth
 
 router.post('/addUser',async(req,res) => {
     const user = new Budget({
         _id : new mongoose.Types.ObjectId,
         username : req.body.username.trim(),
         password : await bcrypt.hash(req.body.password.trim(),8),
-        jwt : jwt.sign({ username: req.body.username }, process.env.SECRET)
+        // jwt : jwt.sign({ username: req.body.username }, process.env.SECRET,{ expiresIn : '1h' })
     })
     try {
         const newUSer = await user.save()
+        const token = jwt.sign({ username : req.body.username }, process.env.SECRET, { expiresIn : '1h' });
         res.status(201).json({
             msg : 'Created',
+            token : token
         })
     } catch (error) {
         res.status(400).json({
@@ -52,10 +56,9 @@ router.get('/login',async(req,res) => {
         if(user) {
             isAuth = await bcrypt.compare(req.body.password,user.password)
             if(isAuth) {
-                const newToken = jwt.sign({ username : user.username },process.env.SECRET)
-                await Budget.updateOne({ username : user.username },{ jwt : newToken })
                 return res.status(200).json({
-                    msg : 'Authenticated'
+                    msg : 'Authenticated',
+                    token : jwt.sign({ username : req.body.username },process.env.SECRET, { expiresIn : '1h' })
                 })
             } else {
                 return res.status(400).json({
@@ -99,6 +102,7 @@ router.get('/getData/:name',auth,async(req,res)=>{
 router.patch('/addCredit/:name',auth,async(req,res) => {
     try {
         const user = await Budget.findOne({username : req.params.name})
+        // const user = req.user;
         if(!user) {
             return res.status(404).json({
                 error : 'not found'
@@ -123,6 +127,7 @@ router.patch('/addCredit/:name',auth,async(req,res) => {
 router.patch('/addDebit/:name',auth,async(req,res) => {
     try {
         const user = await Budget.findOne({username : req.params.name})
+        // const user = req.user;
         if(!user) {
             return res.status(404).json({
                 error : 'not found'
