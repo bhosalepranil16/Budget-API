@@ -34,13 +34,13 @@ router.post('/addUser',async(req,res) => {
         _id : new mongoose.Types.ObjectId,
         username : req.body.username.trim(),
         password : await bcrypt.hash(req.body.password.trim(),8),
-        // jwt : jwt.sign({ username: req.body.username }, process.env.SECRET,{ expiresIn : '1h' })
     })
     try {
         const newUSer = await user.save()
         const token = jwt.sign({ username : req.body.username }, process.env.SECRET, { expiresIn : '1h' });
         res.status(201).json({
             msg : 'Created',
+            username : req.body.username,
             token : token
         })
     } catch (error) {
@@ -58,11 +58,12 @@ router.get('/login',async(req,res) => {
             if(isAuth) {
                 return res.status(200).json({
                     msg : 'Authenticated',
+                    username : req.body.username,
                     token : jwt.sign({ username : req.body.username },process.env.SECRET, { expiresIn : '1h' })
                 })
             } else {
                 return res.status(400).json({
-                    error : 'Not Authenticated'
+                    error : 'Invalid Credentials'
                 })
             }
         }
@@ -112,7 +113,7 @@ router.patch('/addCredit/:name',auth,async(req,res) => {
             price : parseInt(req.body.price),
             title : req.body.title
         }
-        const oldTotalCredit = parseInt(user.totalCredit) + newCredit.price;
+        const oldTotalCredit = parseFloat(user.totalCredit) + newCredit.price;
         await Budget.updateOne({ username:req.params.name },{ totalCredit: oldTotalCredit, $push :{ credit : [newCredit] } },{ new: true })
         res.status(200).json({
             msg : 'updated'
@@ -134,7 +135,7 @@ router.patch('/addDebit/:name',auth,async(req,res) => {
             })
         }        
         const newDebit = {
-            price : parseInt(req.body.price),
+            price : parseFloat(req.body.price),
             title : req.body.title
         }
         const oldTotalDebit = parseInt(user.totalDebit) + newDebit.price;
